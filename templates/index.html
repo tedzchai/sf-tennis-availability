@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SF Tennis Court Availability</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #f5f5f5;
+            color: #1a1a1a;
+            min-height: 100vh;
+        }
+        .header {
+            background: #1a6b3c;
+            color: white;
+            padding: 24px 20px;
+            text-align: center;
+        }
+        .header h1 { font-size: 1.5rem; font-weight: 600; }
+        .header p { font-size: 0.85rem; opacity: 0.85; margin-top: 4px; }
+        .controls {
+            max-width: 600px;
+            margin: 24px auto;
+            padding: 20px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .field { margin-bottom: 16px; }
+        .field label {
+            display: block;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #555;
+            margin-bottom: 6px;
+        }
+        .field input {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 1rem;
+            outline: none;
+            transition: border-color 0.15s;
+        }
+        .field input:focus { border-color: #1a6b3c; }
+        .time-row {
+            display: flex;
+            gap: 12px;
+        }
+        .time-row .field { flex: 1; }
+        .optional-tag {
+            font-weight: 400;
+            color: #999;
+            text-transform: none;
+            letter-spacing: 0;
+        }
+        button.search {
+            width: 100%;
+            padding: 12px;
+            background: #1a6b3c;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        button.search:hover { background: #145a31; }
+        button.search:disabled { background: #999; cursor: not-allowed; }
+        .results {
+            max-width: 600px;
+            margin: 0 auto 40px;
+            padding: 0 20px;
+        }
+        .status {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+            font-size: 0.95rem;
+        }
+        .status.error { color: #c0392b; }
+        .location-card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            margin-bottom: 12px;
+            overflow: hidden;
+        }
+        .location-name {
+            font-weight: 600;
+            font-size: 1rem;
+            padding: 14px 16px 8px;
+            color: #1a6b3c;
+        }
+        .court-row {
+            display: flex;
+            padding: 6px 16px;
+            font-size: 0.9rem;
+            border-top: 1px solid #f0f0f0;
+        }
+        .court-row:last-child { padding-bottom: 14px; }
+        .court-label {
+            font-weight: 500;
+            min-width: 80px;
+            color: #333;
+        }
+        .court-slots {
+            color: #555;
+            flex: 1;
+        }
+        .summary {
+            text-align: center;
+            font-size: 0.85rem;
+            color: #888;
+            margin-bottom: 16px;
+        }
+        .no-results {
+            text-align: center;
+            padding: 40px 20px;
+            color: #888;
+        }
+        .no-results span { font-size: 2rem; display: block; margin-bottom: 8px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>SF Tennis Court Availability</h1>
+        <p>San Francisco Rec & Park — 28 locations, 66+ courts</p>
+    </div>
+
+    <div class="controls">
+        <div class="field">
+            <label>Date</label>
+            <input type="date" id="date-input">
+        </div>
+        <div class="time-row">
+            <div class="field">
+                <label>Start time <span class="optional-tag">(optional)</span></label>
+                <input type="time" id="time-input">
+            </div>
+            <div class="field">
+                <label>End time <span class="optional-tag">(optional)</span></label>
+                <input type="time" id="end-time-input">
+            </div>
+        </div>
+        <button class="search" id="search-btn" onclick="search()">Check Availability</button>
+    </div>
+
+    <div class="results" id="results"></div>
+
+    <script>
+        // Default date to today
+        const today = new Date();
+        const yyyy = today.getFullYear();
+        const mm = String(today.getMonth() + 1).padStart(2, '0');
+        const dd = String(today.getDate()).padStart(2, '0');
+        document.getElementById('date-input').value = `${yyyy}-${mm}-${dd}`;
+
+        async function search() {
+            const dateVal = document.getElementById('date-input').value;
+            const timeVal = document.getElementById('time-input').value;
+            const endTimeVal = document.getElementById('end-time-input').value;
+            const resultsDiv = document.getElementById('results');
+            const btn = document.getElementById('search-btn');
+
+            if (!dateVal) {
+                resultsDiv.innerHTML = '<div class="status error">Please select a date.</div>';
+                return;
+            }
+
+            btn.disabled = true;
+            btn.textContent = 'Checking 28 locations...';
+            resultsDiv.innerHTML = '<div class="status">Fetching availability...</div>';
+
+            let url = `/api/availability?date=${dateVal}`;
+            if (timeVal) url += `&time=${timeVal}`;
+            if (endTimeVal) url += `&end_time=${endTimeVal}`;
+
+            try {
+                const resp = await fetch(url);
+                const data = await resp.json();
+
+                if (data.error) {
+                    resultsDiv.innerHTML = `<div class="status error">${data.error}</div>`;
+                    return;
+                }
+
+                const results = data.results;
+                if (!results || results.length === 0) {
+                    resultsDiv.innerHTML = `
+                        <div class="no-results">
+                            <span>:(</span>
+                            No available courts found for this date/time.
+                        </div>`;
+                    return;
+                }
+
+                const totalCourts = results.reduce((sum, loc) => sum + loc.courts.length, 0);
+                let html = `<div class="summary">${totalCourts} court${totalCourts !== 1 ? 's' : ''} available across ${results.length} location${results.length !== 1 ? 's' : ''}</div>`;
+
+                for (const loc of results) {
+                    html += `<div class="location-card">`;
+                    html += `<div class="location-name">${loc.location}</div>`;
+                    for (const court of loc.courts) {
+                        html += `<div class="court-row">`;
+                        html += `<span class="court-label">${court.court}</span>`;
+                        html += `<span class="court-slots">${court.slots.join(', ')}</span>`;
+                        html += `</div>`;
+                    }
+                    html += `</div>`;
+                }
+
+                resultsDiv.innerHTML = html;
+            } catch (err) {
+                resultsDiv.innerHTML = `<div class="status error">Network error: ${err.message}</div>`;
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Check Availability';
+            }
+        }
+
+        // Search on page load with today's date
+        search();
+    </script>
+</body>
+</html>
