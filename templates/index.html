@@ -108,7 +108,13 @@
         .court-label {
             font-weight: 500;
             min-width: 80px;
-            color: #333;
+        }
+        .court-label a {
+            color: #1a6b3c;
+            text-decoration: none;
+        }
+        .court-label a:hover {
+            text-decoration: underline;
         }
         .court-slots {
             color: #555;
@@ -209,7 +215,7 @@
                     html += `<div class="location-name">${loc.location}</div>`;
                     for (const court of loc.courts) {
                         html += `<div class="court-row">`;
-                        html += `<span class="court-label">${court.court}</span>`;
+                        html += `<span class="court-label"><a href="${loc.booking_url}" target="_blank" rel="noopener">${court.court}</a></span>`;
                         html += `<span class="court-slots">${court.slots.join(', ')}</span>`;
                         html += `</div>`;
                     }
