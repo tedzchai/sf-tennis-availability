@@ -9,7 +9,7 @@ SF Rec & Park reservable tennis courts.
 import json
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 from flask import Flask, jsonify, render_template, request
 
@@ -124,7 +124,7 @@ def get_availability(date_str, filter_start=None, filter_end=None):
                 })
 
         if courts:
-            booking_url = f"https://www.rec.us/{loc_slug}?date={date_str}"
+            booking_url = f"https://www.rec.us/{loc_slug}"
             return {"location": loc_name, "booking_url": booking_url, "courts": courts}
         return None
 
@@ -149,9 +149,22 @@ def api_availability():
         return jsonify({"error": "date parameter required (YYYY-MM-DD)"}), 400
 
     try:
-        datetime.strptime(date_str, "%Y-%m-%d")
+        date_obj = datetime.strptime(date_str, "%Y-%m-%d").date()
     except ValueError:
         return jsonify({"error": "Invalid date format. Use YYYY-MM-DD."}), 400
+
+    # Use Pacific time since SF courts operate in PT
+    pacific_offset = timezone(timedelta(hours=-7))
+    today = datetime.now(pacific_offset).date()
+    max_date = today + timedelta(days=7)
+
+    if date_obj < today:
+        return jsonify({"error": "Date is in the past."}), 400
+    if date_obj > max_date:
+        return jsonify({
+            "error": f"Date is too far out. Reservations open 7 days in advance. "
+                     f"The furthest you can check is {max_date.strftime('%A, %B %d')}."
+        }), 400
 
     time_str = request.args.get("time")
     end_time_str = request.args.get("end_time")

@@ -161,12 +161,21 @@
     <div class="results" id="results"></div>
 
     <script>
-        // Default date to today
+        // Default date to today, cap at 7 days out
         const today = new Date();
-        const yyyy = today.getFullYear();
-        const mm = String(today.getMonth() + 1).padStart(2, '0');
-        const dd = String(today.getDate()).padStart(2, '0');
-        document.getElementById('date-input').value = `${yyyy}-${mm}-${dd}`;
+        const maxDate = new Date(today);
+        maxDate.setDate(maxDate.getDate() + 7);
+
+        function toIso(d) {
+            return d.getFullYear() + '-' +
+                String(d.getMonth() + 1).padStart(2, '0') + '-' +
+                String(d.getDate()).padStart(2, '0');
+        }
+
+        const dateInput = document.getElementById('date-input');
+        dateInput.value = toIso(today);
+        dateInput.min = toIso(today);
+        dateInput.max = toIso(maxDate);
 
         async function search() {
             const dateVal = document.getElementById('date-input').value;
