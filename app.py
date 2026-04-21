@@ -16,6 +16,7 @@ from flask import Flask, jsonify, render_template, request
 app = Flask(__name__)
 
 API_BASE = "https://api.rec.us/v1"
+PACIFIC = timezone(timedelta(hours=-7))  # PDT (SF courts use America/Los_Angeles)
 
 # (uuid, display_name, rec.us_slug)
 LOCATIONS = [
@@ -49,6 +50,9 @@ LOCATIONS = [
     ("2a18ef67-333c-4d9c-a86c-e0709f07f5c3", "Upper Noe", "uppernoe"),
 ]
 
+# In-memory cache for court configs (rarely change)
+_court_config_cache = {}
+
 
 def parse_time_24h(time_str):
     """Parse 'HH:MM' into hours float."""
@@ -67,39 +71,99 @@ def format_time(hours_float):
     return f"{display_h}:{m:02d} {period}"
 
 
-def fetch_schedule(location_id, date_str):
-    """Fetch schedule JSON from rec.us API."""
-    url = f"{API_BASE}/locations/{location_id}/schedule?startDate={date_str}"
-    req = urllib.request.Request(url)
+def fetch_json(url):
+    """Fetch JSON from a URL, returning parsed dict or None on error."""
     try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
+        with urllib.request.urlopen(urllib.request.Request(url), timeout=15) as resp:
             return json.loads(resp.read())
-    except Exception as e:
-        return {"error": str(e)}
+    except Exception:
+        return None
+
+
+def fetch_court_configs(location_id):
+    """Fetch court configs from location API. Returns dict per court:
+    {court_name: {"slot_minutes": int, "window_days": int}}
+    """
+    if location_id in _court_config_cache:
+        return _court_config_cache[location_id]
+
+    data = fetch_json(f"{API_BASE}/locations/{location_id}")
+    if not data:
+        return {}
+
+    loc = data.get("location", data)
+    loc_default_window = loc.get("defaultReservationWindow", 7)
+    courts = loc.get("courts", [])
+    configs = {}
+
+    for court in courts:
+        name = court.get("courtNumber", "Unknown")
+        max_time = court.get("maxReservationTime", "01:30:00")
+        parts = max_time.split(":")
+        slot_minutes = int(parts[0]) * 60 + int(parts[1])
+        window_days = court.get("defaultReservationWindowDays") or loc_default_window
+        configs[name] = {
+            "slot_minutes": slot_minutes,
+            "window_days": window_days,
+        }
+
+    _court_config_cache[location_id] = configs
+    return configs
+
+
+def break_into_slots(start, end, slot_minutes):
+    """Break a continuous RESERVABLE block into fixed-size bookable slots."""
+    slots = []
+    slot_hours = slot_minutes / 60.0
+    current = start
+    while current + slot_hours <= end + 0.001:
+        slots.append((current, current + slot_hours))
+        current += slot_hours
+    return slots
 
 
 def get_availability(date_str, filter_start=None, filter_end=None):
     """Fetch and parse availability for all locations.
 
     Returns list of dicts sorted by location name:
-    [{"location": "...", "courts": [{"court": "Court 1", "slots": ["7:30 AM-12:00 PM"]}]}]
+    [{"location": "...", "courts": [{"court": "Court 1", "slots": ["7:30-9:00 AM"]}]}]
     """
+    now_pacific = datetime.now(PACIFIC)
+    today = now_pacific.date()
+    date_obj = datetime.strptime(date_str, "%Y-%m-%d").date()
+    is_today = date_obj == today
+    current_hour = now_pacific.hour + now_pacific.minute / 60.0
+    days_ahead = (date_obj - today).days
 
     def fetch_one(loc_tuple):
         loc_id, loc_name, loc_slug = loc_tuple
-        data = fetch_schedule(loc_id, date_str)
-        if "error" in data:
+
+        # Fetch court configs and schedule in sequence
+        court_configs = fetch_court_configs(loc_id)
+        schedule_data = fetch_json(
+            f"{API_BASE}/locations/{loc_id}/schedule?startDate={date_str}"
+        )
+        if not schedule_data:
             return None
 
         date_key = date_str.replace("-", "")
-        courts_data = data.get("dates", {}).get(date_key, [])
+        courts_data = schedule_data.get("dates", {}).get(date_key, [])
         courts = []
 
         for court in courts_data:
             court_name = court.get("courtNumber", "Unknown")
             schedule = court.get("schedule", {})
-            slots = []
 
+            # Get per-court config (slot duration and booking window)
+            cfg = court_configs.get(court_name, {})
+            slot_minutes = cfg.get("slot_minutes", 90)
+            window_days = cfg.get("window_days", 7)
+
+            # Skip this court if the date is outside its booking window
+            if days_ahead > window_days:
+                continue
+
+            slots = []
             for time_range, details in schedule.items():
                 if details.get("referenceType") != "RESERVABLE":
                     continue
@@ -110,22 +174,37 @@ def get_availability(date_str, filter_start=None, filter_end=None):
                 except (ValueError, IndexError):
                     continue
 
-                if filter_start is not None:
-                    if not (start < filter_end and end > filter_start):
+                # Break continuous block into individual bookable slots
+                individual = break_into_slots(start, end, slot_minutes)
+
+                for slot_start, slot_end in individual:
+                    # Skip slots that have already passed today
+                    if is_today and slot_start < current_hour:
                         continue
 
-                slots.append((start, end))
+                    # Apply user time filter
+                    if filter_start is not None:
+                        if not (slot_start < filter_end and slot_end > filter_start):
+                            continue
+
+                    slots.append((slot_start, slot_end))
 
             if slots:
                 slots.sort()
                 courts.append({
                     "court": court_name,
-                    "slots": [f"{format_time(s)}-{format_time(e)}" for s, e in slots],
+                    "slots": [
+                        f"{format_time(s)}-{format_time(e)}" for s, e in slots
+                    ],
                 })
 
         if courts:
             booking_url = f"https://www.rec.us/{loc_slug}"
-            return {"location": loc_name, "booking_url": booking_url, "courts": courts}
+            return {
+                "location": loc_name,
+                "booking_url": booking_url,
+                "courts": courts,
+            }
         return None
 
     with ThreadPoolExecutor(max_workers=10) as pool:
@@ -153,9 +232,7 @@ def api_availability():
     except ValueError:
         return jsonify({"error": "Invalid date format. Use YYYY-MM-DD."}), 400
 
-    # Use Pacific time since SF courts operate in PT
-    pacific_offset = timezone(timedelta(hours=-7))
-    today = datetime.now(pacific_offset).date()
+    today = datetime.now(PACIFIC).date()
     max_date = today + timedelta(days=7)
 
     if date_obj < today:
