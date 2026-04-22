@@ -50,8 +50,182 @@ LOCATIONS = [
     ("2a18ef67-333c-4d9c-a86c-e0709f07f5c3", "Upper Noe", "uppernoe"),
 ]
 
-# In-memory cache for court configs (rarely change)
-_court_config_cache = {}
+# Court configs: {location_id: {court_name: {slot_minutes, window_days}}}
+# Fetched from /v1/locations/{id} API. Most courts are 90-min/7-day;
+# some are 60-min/2-day. Crocker Amazon Courts A-D are 120-min.
+COURT_CONFIGS = {
+    "032e605f-6065-4794-9675-b1bbebe18159": {  # Potrero Hill
+        "Court 1": {"slot_minutes": 90, "window_days": 7},
+        "Court 2": {"slot_minutes": 90, "window_days": 2},
+    },
+    "070037ab-f407-486a-9f88-989905be1039": {  # Fulton
+        "Court 1": {"slot_minutes": 90, "window_days": 2},
+    },
+    "16fdf80f-4e50-452a-843f-63d159c798e2": {  # Glen Canyon
+        "Court 1": {"slot_minutes": 60, "window_days": 7},
+        "Court 2": {"slot_minutes": 60, "window_days": 7},
+    },
+    "1a5a0d4b-ef5d-44ab-a8ab-a13f39dcdc7d": {  # Stern Grove
+        "Court 1": {"slot_minutes": 90, "window_days": 7},
+        "Court 2": {"slot_minutes": 90, "window_days": 7},
+        "Court A": {"slot_minutes": 90, "window_days": 7},
+        "Court C": {"slot_minutes": 90, "window_days": 7},
+        "Court D": {"slot_minutes": 90, "window_days": 7},
+        "Court F": {"slot_minutes": 90, "window_days": 7},
+    },
+    "25eafd72-ca31-4df7-8850-79c05edf3796": {  # St. Mary's
+        "Court 1": {"slot_minutes": 90, "window_days": 7},
+        "Court 2": {"slot_minutes": 90, "window_days": 7},
+    },
+    "2a18ef67-333c-4d9c-a86c-e0709f07f5c3": {  # Upper Noe
+        "Court 1": {"slot_minutes": 90, "window_days": 2},
+        "Court A": {"slot_minutes": 90, "window_days": 2},
+        "Court B": {"slot_minutes": 90, "window_days": 2},
+    },
+    "3552b6f7-e7bd-4334-9e4a-731b015447e0": {  # Helen Wills
+        "Court 1": {"slot_minutes": 90, "window_days": 7},
+    },
+    "360736ab-a655-478d-aab5-4e54fea0c140": {  # Jackson
+        "Court 1": {"slot_minutes": 90, "window_days": 2},
+        "Court A": {"slot_minutes": 90, "window_days": 2},
+        "Court B": {"slot_minutes": 90, "window_days": 2},
+    },
+    "3f842b1e-13f9-447d-ab12-62b62d954d3e": {  # Buena Vista
+        "Court 1": {"slot_minutes": 90, "window_days": 7},
+        "Court 2": {"slot_minutes": 90, "window_days": 7},
+        "Court A": {"slot_minutes": 90, "window_days": 7},
+        "Court B": {"slot_minutes": 90, "window_days": 7},
+        "Court C": {"slot_minutes": 90, "window_days": 7},
+        "Court D": {"slot_minutes": 90, "window_days": 7},
+    },
+    "5a0b8fa6-11db-433e-9314-bafb956d8622": {  # Parkside Square
+        "Court 1": {"slot_minutes": 90, "window_days": 7},
+        "Court 2": {"slot_minutes": 90, "window_days": 7},
+        "Court 3": {"slot_minutes": 90, "window_days": 7},
+        "Court 4": {"slot_minutes": 60, "window_days": 2},
+        "Court A": {"slot_minutes": 90, "window_days": 7},
+        "Court B": {"slot_minutes": 90, "window_days": 7},
+        "Court C": {"slot_minutes": 90, "window_days": 7},
+        "Court D": {"slot_minutes": 90, "window_days": 7},
+        "Court E": {"slot_minutes": 90, "window_days": 7},
+        "Court F": {"slot_minutes": 90, "window_days": 7},
+        "Court G": {"slot_minutes": 60, "window_days": 2},
+        "Court H": {"slot_minutes": 60, "window_days": 2},
+    },
+    "5a52a5e8-2e9f-4976-8a5c-0bc53d51afe9": {  # Miraloma
+        "Court 1": {"slot_minutes": 90, "window_days": 2},
+    },
+    "779905bd-4c2b-45b3-abd0-48140998bca1": {  # Crocker Amazon
+        "Court 1": {"slot_minutes": 90, "window_days": 7},
+        "Court 2": {"slot_minutes": 90, "window_days": 7},
+        "Court 3": {"slot_minutes": 60, "window_days": 2},
+        "Court A": {"slot_minutes": 120, "window_days": 7},
+        "Court B": {"slot_minutes": 120, "window_days": 7},
+        "Court C": {"slot_minutes": 120, "window_days": 2},
+        "Court D": {"slot_minutes": 120, "window_days": 2},
+    },
+    "7a8ef25a-dc20-4046-8aab-7212a9a41d20": {  # J.P. Murphy
+        "Court 1": {"slot_minutes": 90, "window_days": 7},
+        "Court 2": {"slot_minutes": 90, "window_days": 7},
+        "Court 3": {"slot_minutes": 90, "window_days": 2},
+    },
+    "81cd2b08-8ea6-40ee-8c89-aeba92506576": {  # Alice Marble
+        "Court 1": {"slot_minutes": 90, "window_days": 7},
+        "Court 2": {"slot_minutes": 90, "window_days": 7},
+        "Court 3": {"slot_minutes": 90, "window_days": 7},
+        "Court 4": {"slot_minutes": 60, "window_days": 2},
+    },
+    "8c3b9b04-a149-4080-b648-e3ff8365bbee": {  # Hamilton
+        "Court 1": {"slot_minutes": 90, "window_days": 7},
+        "Court 2": {"slot_minutes": 90, "window_days": 2},
+    },
+    "8f8e510f-e0d8-4364-8531-a9a0d0d6b2b8": {  # Joe DiMaggio
+        "Court 1": {"slot_minutes": 90, "window_days": 7},
+        "Court 2": {"slot_minutes": 90, "window_days": 7},
+        "Court 3": {"slot_minutes": 90, "window_days": 7},
+    },
+    "95745483-6b38-4e99-8ba2-a3e23cda8587": {  # Dolores
+        "Court 1": {"slot_minutes": 90, "window_days": 7},
+        "Court 2": {"slot_minutes": 90, "window_days": 7},
+        "Court 3": {"slot_minutes": 60, "window_days": 2},
+        "Court 4": {"slot_minutes": 90, "window_days": 7},
+        "Court 5": {"slot_minutes": 90, "window_days": 7},
+        "Court 6": {"slot_minutes": 90, "window_days": 7},
+    },
+    "95f7e887-5096-463b-834a-09d67889557e": {  # Richmond
+        "Court 1": {"slot_minutes": 90, "window_days": 2},
+        "Court A": {"slot_minutes": 60, "window_days": 2},
+        "Court B": {"slot_minutes": 60, "window_days": 7},
+    },
+    "9d05fa5b-38fc-49b7-88c5-74825703d936": {  # McLaren
+        "Court 1": {"slot_minutes": 90, "window_days": 7},
+        "Court 2": {"slot_minutes": 90, "window_days": 7},
+        "Court 3": {"slot_minutes": 90, "window_days": 7},
+        "Court 4": {"slot_minutes": 90, "window_days": 7},
+        "Court 5": {"slot_minutes": 90, "window_days": 2},
+        "Court 6": {"slot_minutes": 90, "window_days": 2},
+    },
+    "ad9e28e1-2d02-4fb5-b31d-b75f63841814": {  # Rossi
+        "Court 1": {"slot_minutes": 90, "window_days": 7},
+        "Court 2": {"slot_minutes": 90, "window_days": 7},
+        "Court 3": {"slot_minutes": 90, "window_days": 7},
+        "Court A": {"slot_minutes": 90, "window_days": 7},
+        "Court B": {"slot_minutes": 90, "window_days": 7},
+        "Court C": {"slot_minutes": 90, "window_days": 7},
+        "Court D": {"slot_minutes": 90, "window_days": 7},
+        "Court E": {"slot_minutes": 90, "window_days": 7},
+    },
+    "af2cd971-0c10-479d-a12e-ca63d55f71be": {  # Mountain Lake
+        "Court 1": {"slot_minutes": 90, "window_days": 7},
+        "Court 2": {"slot_minutes": 90, "window_days": 7},
+        "Court 3": {"slot_minutes": 90, "window_days": 7},
+        "Court 4": {"slot_minutes": 60, "window_days": 2},
+    },
+    "bb6254d3-0ef0-475d-8de9-ac7d6b0323f4": {  # Minnie & Lovie Ward
+        "Court 1": {"slot_minutes": 90, "window_days": 7},
+        "Court 2": {"slot_minutes": 90, "window_days": 2},
+    },
+    "c2f20478-83d8-48c9-af3d-065d7ba22d60": {  # Presidio Wall
+        "Court 1": {"slot_minutes": 90, "window_days": 7},
+        "Court 2": {"slot_minutes": 90, "window_days": 7},
+        "Court 3": {"slot_minutes": 90, "window_days": 7},
+        "Court 4": {"slot_minutes": 90, "window_days": 2},
+        "Court A": {"slot_minutes": 60, "window_days": 7},
+        "Court C": {"slot_minutes": 60, "window_days": 7},
+        "Court E": {"slot_minutes": 60, "window_days": 7},
+    },
+    "c41c7b8f-cb09-415a-b8ea-ad4b82d792b9": {  # Balboa
+        "Court 1": {"slot_minutes": 90, "window_days": 7},
+        "Court 2": {"slot_minutes": 90, "window_days": 7},
+        "Court 3": {"slot_minutes": 90, "window_days": 7},
+        "Court 4": {"slot_minutes": 60, "window_days": 2},
+    },
+    "c4fc2b3e-d1bc-47d9-b920-76d00d32b20b": {  # Lafayette
+        "Court 1": {"slot_minutes": 90, "window_days": 7},
+        "Court 2": {"slot_minutes": 60, "window_days": 2},
+    },
+    "d3fc78ce-0617-40dc-b7f7-d41ba95f09ef": {  # DuPont
+        "Court 1": {"slot_minutes": 90, "window_days": 7},
+        "Court 2": {"slot_minutes": 90, "window_days": 7},
+        "Court 3": {"slot_minutes": 90, "window_days": 7},
+        "Court 4": {"slot_minutes": 60, "window_days": 2},
+    },
+    "fb0d16b1-5f9f-465f-8ebf-fccf5d400c47": {  # Moscone
+        "Court 1": {"slot_minutes": 90, "window_days": 7},
+        "Court 2": {"slot_minutes": 90, "window_days": 7},
+        "Court 3": {"slot_minutes": 90, "window_days": 7},
+        "Court 4": {"slot_minutes": 60, "window_days": 2},
+        "Court A": {"slot_minutes": 90, "window_days": 7},
+        "Court B": {"slot_minutes": 90, "window_days": 7},
+        "Court E": {"slot_minutes": 60, "window_days": 2},
+        "Court F": {"slot_minutes": 60, "window_days": 2},
+    },
+    "fe61cfdb-abf7-4f52-8ce4-45feb58f10b7": {  # Sunset
+        "Court 1": {"slot_minutes": 90, "window_days": 7},
+        "Court 2": {"slot_minutes": 90, "window_days": 7},
+    },
+}
+DEFAULT_COURT_CONFIG = {"slot_minutes": 90, "window_days": 7}
 
 
 def parse_time_24h(time_str):
@@ -78,37 +252,6 @@ def fetch_json(url):
             return json.loads(resp.read())
     except Exception:
         return None
-
-
-def fetch_court_configs(location_id):
-    """Fetch court configs from location API. Returns dict per court:
-    {court_name: {"slot_minutes": int, "window_days": int}}
-    """
-    if location_id in _court_config_cache:
-        return _court_config_cache[location_id]
-
-    data = fetch_json(f"{API_BASE}/locations/{location_id}")
-    if not data:
-        return {}
-
-    loc = data.get("location", data)
-    loc_default_window = loc.get("defaultReservationWindow", 7)
-    courts = loc.get("courts", [])
-    configs = {}
-
-    for court in courts:
-        name = court.get("courtNumber", "Unknown")
-        max_time = court.get("maxReservationTime", "01:30:00")
-        parts = max_time.split(":")
-        slot_minutes = int(parts[0]) * 60 + int(parts[1])
-        window_days = court.get("defaultReservationWindowDays") or loc_default_window
-        configs[name] = {
-            "slot_minutes": slot_minutes,
-            "window_days": window_days,
-        }
-
-    _court_config_cache[location_id] = configs
-    return configs
 
 
 def break_into_slots(start, end, slot_minutes):
@@ -138,8 +281,7 @@ def get_availability(date_str, filter_start=None, filter_end=None):
     def fetch_one(loc_tuple):
         loc_id, loc_name, loc_slug = loc_tuple
 
-        # Fetch court configs and schedule in sequence
-        court_configs = fetch_court_configs(loc_id)
+        court_configs = COURT_CONFIGS.get(loc_id, {})
         schedule_data = fetch_json(
             f"{API_BASE}/locations/{loc_id}/schedule?startDate={date_str}"
         )
@@ -154,10 +296,9 @@ def get_availability(date_str, filter_start=None, filter_end=None):
             court_name = court.get("courtNumber", "Unknown")
             schedule = court.get("schedule", {})
 
-            # Get per-court config (slot duration and booking window)
-            cfg = court_configs.get(court_name, {})
-            slot_minutes = cfg.get("slot_minutes", 90)
-            window_days = cfg.get("window_days", 7)
+            cfg = court_configs.get(court_name, DEFAULT_COURT_CONFIG)
+            slot_minutes = cfg["slot_minutes"]
+            window_days = cfg["window_days"]
 
             # Skip this court if the date is outside its booking window
             if days_ahead > window_days:
